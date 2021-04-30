@@ -1,0 +1,230 @@
+openapi: 3.0.0
+info:
+  version: 1.0.0
+  title: CURRENCY-CONVERTER-API
+  description: description
+servers:
+- url: "{basePath}"
+  variables:
+    basePath:
+      default: /converter
+x-amazon-apigateway-request-validators:
+  all:
+    validateRequestBody: true
+    validateRequestParameters: true
+  params-only:
+    validateRequestBody: false
+    validateRequestParameters: true
+x-amazon-apigateway-request-validator: all
+
+paths:
+
+  /transactions:
+    get:
+      tags:
+        - Converter
+      summary: Get transactions from exhangeRateAPI
+      parameters:
+        - in: header
+          name: token
+          schema:
+            type: string
+          required: true
+        - in: header
+          name: x-api-key
+          schema:
+            type: string
+          required: true
+      responses:
+        200:
+          description: found successfully
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: "string"
+            Access-Control-Allow-Methods:
+              schema:
+                type: "string"
+            Access-Control-Allow-Headers:
+              schema:
+                type: "string"
+          content:
+            application/json:
+              schema:
+                type: object
+        400:
+          description:  not found
+      x-amazon-apigateway-integration:
+        type: http
+        uri: 'http://${baseURL}/transactions'
+        httpMethod: GET
+        requestParameters:
+          integration.request.header.token: method.request.header.token
+        responses:
+          '2\d{2}':
+            statusCode: '200'
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+          default:
+            statusCode: '400'
+      security:
+        - api_key: []
+        - token-authorizer: []
+
+    post:
+        tags:
+          - Converter
+        summary: Process transactions
+        requestBody:
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transactions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        createdAt:
+                          type: string
+                        currency:
+                          type: string
+                        amount:
+                          type: integer
+                        convertedAmount:
+                          type: number
+                        checksum:
+                          type: string
+                  additionalProperties: false
+        parameters:
+          - in: header
+            name: x-api-key
+            schema:
+              type: string
+            required: true
+        responses:
+          200:
+            description: data found successfully
+            headers:
+              Access-Control-Allow-Origin:
+                schema:
+                  type: "string"
+              Access-Control-Allow-Methods:
+                schema:
+                  type: "string"
+              Access-Control-Allow-Headers:
+                schema:
+                  type: "string"
+            content:
+              application/json:
+                schema:
+                  type: object
+          400:
+            description:  not found
+          204:
+            description: Content not found
+          404:
+            description: Content not found
+        x-amazon-apigateway-integration:
+          type: http
+          uri: 'http://${baseURL}/transactions'
+          httpMethod: POST
+          requestParameters:
+            integration.request.header.user-agent: context.identity.userAgent
+            integration.request.header.host: context.identity.sourceIp
+          responses:
+            '2\d{2}':
+              statusCode: '200'
+              responseParameters:
+                 method.response.header.Access-Control-Allow-Origin: "'*'"
+            default:
+              statusCode: '400'
+          passthroughBehavior: never
+          requestTemplates:
+            application/json: ''
+        security:
+          - api_key: []
+    options:
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: "string"
+            Access-Control-Allow-Methods:
+              schema:
+                type: "string"
+            Access-Control-Allow-Headers:
+              schema:
+                type: "string"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Empty"
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,token'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        passthroughBehavior: "when_no_match"
+        requestTemplates:
+          application/json: "{\"statusCode\": 200}"
+        type: "mock"
+
+
+components:
+  schemas:
+    validString:
+      minLength: 1
+      pattern: "^(?! |.* $)[A-Za-z]+$"
+      type: "string"
+    validAlphaNumericWithDash:
+      minLength: 1
+      pattern: "^[a-zA-Z0-9]+(?:-?[a-zA-Z0-9]+)+$"
+      type: "string"
+    validDate:
+      pattern: "(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})"
+      type: "string"
+
+
+  securitySchemes:
+    api_key:
+      type: apiKey
+      name: x-api-key
+      in: header
+    token-authorizer:
+      type: apiKey
+      name: token
+      in: header
+      x-amazon-apigateway-authtype: custom
+      x-amazon-apigateway-authorizer:
+        type: request
+        authorizerUri: api-gateway-uri
+        authorizerCredentials: 'aws-iam-role'
+        identitySource: method.request.header.token
+x-amazon-apigateway-documentation:
+  version: 1.0.3
+  documentationParts:
+    - location:
+        type: API
+      properties:
+        description: API description
+        info:
+          description: API info description 4
+          version: API info version 3
+    - location:
+        type: METHOD
+        method: GET
+      properties:
+        description: Method description.
+    - location:
+        type: RESPONSE
+        method: GET
+        statusCode: "200"
+      properties:
+        description: 200 response

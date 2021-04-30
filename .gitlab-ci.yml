@@ -1,0 +1,184 @@
+# =========================================================== global config ===
+
+stages:
+  - audit
+  - lint
+  - test
+  - build
+  - deploy
+
+variables:
+  SWAGGER_FILE_NAME: converter.yaml
+  BRANCH_DIRECTORY: Users-Testing Search-Testing SnapShots-Testing Tickets-Testing
+  APP_SERVICE_NAME: Converter
+
+before_script:
+  - apk add --no-cache python3 py3-pip
+  - pip3 install awscli
+  - printenv | grep -E "^(ACCOUNT_|CI_|BRANCH_|STACK_|JOB_)" | sort
+
+# ================================================================= anchors ===
+
+.qa-variables: &qa-variables
+  # aws keys set at group level on ecs-services
+  AWS_DEFAULT_REGION: region
+  AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+  AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+  ACCOUNT_ECS_CLUSTER_NAME: ecs-cluster-name
+  ACCOUNT_STAGE_VARIABLE_KEY: stageVariable
+  ACCOUNT_STAGE_VARIABLE_VALUE: stageVariableValue
+  ACCOUNT_RESTAPI_ID: restapi-id
+  ACCOUNT_RESTAPI_STAGE: dev
+  ACCOUNT_REPOSITORY_URL: repo-url
+  ACCOUNT_API_URL: api-url
+  ACCOUNT_AUTHORIZER_ARN: arn
+  ACCOUNT_AUTHORIZER_ROLE: role
+
+# --------------------------------------------------------------- templates ---
+
+.job-audit:
+  image: node:10-alpine
+  tags:
+    - default
+  before_script:
+    - apk add --no-cache nodejs npm
+  script:
+    - npm audit
+
+.job-lint:
+  image: node:10-alpine
+  tags:
+    - default
+  before_script:
+    - apk add --no-cache nodejs npm
+  script:
+    - npm i eslint
+    - node_modules/eslint/bin/eslint.js .
+
+.job-test:
+  image: node:10.16.3
+  tags:
+    - default
+  before_script:
+    - apt-get install git
+    - export S_URL=$SERVER_URL
+    - export S_KEY=$SERVER_KEY
+    - export S_TOKEN=$SERVER_TOKEN
+  script:
+    - git clone http://sample.git
+    - cd dir && git checkout dev
+    - cp dir.yaml /build/dir-name/ecs-services
+    - cd /builds/dir-name/ecs-services/${CI_PROJECT_NAME}
+    - git clone http://remote.git
+    - cd branch
+    - git checkout ${JOB_BRANCH}
+    - git checkout -f
+    - git pull origin ${JOB_BRANCH}
+    - git status
+    - mkdir swagger
+    - cd ../
+    - cp ${APP_SERVICE_NAME}.yaml branch/swagger/
+    - cp /builds/dir-name/ecs-services/dir.yaml branch/swagger
+    - cd branch
+    - npm i
+    - node branch.js --swagger --thd --serverUrl ${S_URL} --key ${S_KEY} --token ${S_TOKEN}
+    - for d in ${BRANCH_DIRECTORY}; do node branch.js --thd --flowDir ./${d}/ | tee /builds/dir-name/${APP_SERVICE_NAME}.txt; done
+    - export VAR1=/builds/dir-namet/${APP_SERVICE_NAME}.txt
+    - /bin/bash /builds/dir-name/ecs-services/${APP_SERVICE_NAME}/checkerror.sh
+
+
+.job-build:
+  image: docker:latest
+  services:
+    - docker:dind
+  tags:
+    - default
+  script:
+    - eval $(aws ecr get-login --no-include-email)
+    - docker build -t ${ACCOUNT_REPOSITORY_URL}:${APP_SERVICE_NAME} .
+    - docker push ${ACCOUNT_REPOSITORY_URL}:${APP_SERVICE_NAME}
+
+
+.job-deploy:
+  tags:
+    - default
+  artifacts:
+    reports:
+      dotenv: deploy.env
+  script:
+    - '# -------------------------------------------------- set variables ---'
+    - export ACCOUNT_AUTHORIZER_URI="apigateway-authorizer-func-ARN"
+    - BASE_PATH=$(cat ${SWAGGER_FILE_NAME} | grep -A 1 "basePath:" | grep "default" | awk -F '/' '{print $2}')
+    - echo "DYNAMIC_ENVIRONMENT_URL=${ACCOUNT_API_URL}/${BASE_PATH}" >> deploy.env
+    - ''
+    - '# ----------------------------------------------- replace variables ---'
+    - sed -ri "s,(authorizerUri:\s).*$,\1${ACCOUNT_AUTHORIZER_URI},g" ${SWAGGER_FILE_NAME}
+    - sed -ri "s,(authorizerCredentials:\s).*$,\1${ACCOUNT_AUTHORIZER_ROLE},g" ${SWAGGER_FILE_NAME}
+    - sed -ri "s,(- url:\s[\"]https:\/\/).*(\/),\1${ACCOUNT_API_URL}\2,g" ${SWAGGER_FILE_NAME}
+    - ''
+    - '# ------------------------------------------------- run deployments ---'
+    - >-
+      aws apigateway put-rest-api --rest-api-id ${ACCOUNT_RESTAPI_ID}
+      --mode overwrite --body file://${SWAGGER_FILE_NAME}
+      --no-fail-on-warnings --region ${AWS_DEFAULT_REGION}
+    - ''
+    - >-
+      aws apigateway create-deployment --rest-api-id ${ACCOUNT_RESTAPI_ID}
+      --stage-name ${JOB_STAGE_NAME}
+      --variables ${ACCOUNT_STAGE_VARIABLE_KEY}=${ACCOUNT_STAGE_VARIABLE_VALUE}
+      --region ${AWS_DEFAULT_REGION}
+    - ''
+    - >-
+      aws ecs update-service --cluster ${ACCOUNT_ECS_CLUSTER_NAME}
+      --service ${JOB_SERVICE_NAME}
+      --region ${AWS_DEFAULT_REGION}
+      --force-new-deployment
+    - ''
+
+# ==================================================================== jobs ===
+
+# -------------------------------------------------------------- job: audit ---
+
+audit:
+  stage: audit
+  extends: .job-audit
+
+# --------------------------------------------------------------- job: lint ---
+
+lint:
+  stage: lint
+  extends: .job-lint
+
+# --------------------------------------------------------------- job: test ---
+
+test-qa:
+  extends: .base-job-test
+  only:
+    - qa
+  variables:
+    <<: *qa-variables
+    JOB_BRANCH: dev
+    JOB_ADMIN_BRANCH: dev
+
+# -------------------------------------------------------------- job: build ---
+
+job-build-qa:
+  extends: .base-job-build
+  only:
+    - beta
+  variables:
+    <<: *qa-variables
+
+# ------------------------------------------------------------- job: deploy ---
+
+job-deploy-qa:
+  extends: .base-job-deploy
+  only:
+    - beta
+  variables:
+    <<: *qa-variables
+    JOB_SERVICE_NAME: ${APP_SERVICE_NAME}-qa
+    JOB_STAGE_NAME: qa
+  environment:
+    name: qa
+    url: $DYNAMIC_ENVIRONMENT_URL
