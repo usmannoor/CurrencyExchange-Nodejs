@@ -17,3 +17,6 @@ app.get('/', function (req, res) {
 });
 
 module.exports = app;
+
+// using it here for Mocha testing
+require('./bin/www');

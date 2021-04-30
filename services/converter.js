@@ -77,7 +77,7 @@ const processTransactionRequests = async (transactions, options) => {
       passed = data.statusCode === 200 ? ++passed : passed;
       failed = data.statusCode !== 200 ? ++failed : failed;
     });
-    return { success: passed === 0, passed: passed, failed: failed };
+    return { success: passed !== 0, passed: passed, failed: failed };
   } catch (err) {
     errorObject = err.error_code ? err : { error_code: ERROR_CODES.PROCESS_MULTIPLE_REQUESTS_ERROR_SERVICE };
     throw errorObject;

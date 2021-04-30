@@ -5,7 +5,8 @@
   "scripts": {
     "lint": "eslint --ignore-path .gitignore .",
     "start:dev": "SET port=3001&& SET NODE_ENV=dev&& SET EXCHANGE_RATE_API_KEY=0333c8368299927ba1d268fe2176a27d&& SET EXCHANGE_RATE_URL=https://api.exchangeratesapi.io/v1/&& node ./bin/www",
-    "prod": "SET port=3001&& SET NODE_ENV=production&& SET EXCHANGE_RATE_API_KEY=0333c8368299927ba1d268fe2176a27d&& SET EXCHANGE_RATE_URL=https://api.exchangeratesapi.io/v1/&& node ./bin/www"
+    "prod": "SET port=3001&& SET NODE_ENV=production&& SET EXCHANGE_RATE_API_KEY=0333c8368299927ba1d268fe2176a27d&& SET EXCHANGE_RATE_URL=https://api.exchangeratesapi.io/v1/&& node ./bin/www",
+    "test": "SET port=3001&& SET NODE_ENV=dev&& SET EXCHANGE_RATE_API_KEY=0333c8368299927ba1d268fe2176a27d&& SET EXCHANGE_RATE_URL=https://api.exchangeratesapi.io/v1/&& mocha tests/*.spec.js  --timeout 100000"
   },
   "dependencies": {
     "compression": "^1.7.4",
@@ -21,6 +22,8 @@
     "uuid": "^3.3.3"
   },
   "devDependencies": {
+    "chai": "^4.3.4",
+    "chai-http": "^4.3.0",
     "eslint": "^6.7.2",
     "eslint-config-standard": "^14.1.0",
     "eslint-plugin-import": "^2.19.1",

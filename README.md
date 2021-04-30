@@ -66,3 +66,4 @@ Open `package.json` then edit the following according to the settings:
 - Also we can go for the **CRON-JOB** technique for the above
 - Import the `PopSpot.postman_collection.json` file into your postman and then hit the URLs to check the responses
 - For sample **GITLAB-PIPELINES SWAGGER and DOCKER** files are attached, if we go for the deployments on AWS ECS services
+- I am using **error codes** which makes easier to debug and trace the actual error
